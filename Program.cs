@@ -10,10 +10,25 @@ using Newtonsoft.Json.Linq;
 class Program
 {
     static string endpoint;
+
+    static string GetAcct(User user)
+    {
+        return user.Host != null
+            ? $"{user.Username}@{user.Host}"
+            : user.Username;
+    }
+
     static async Task Main(string[] args)
     {
         string token;
         string host;
+
+        async Task RetryAsync(Exception e)
+        {
+            Console.WriteLine($"例外がスローされました: {e.Message}");
+            Console.WriteLine("15分後に再試行します");
+            await Task.Delay(899000);
+        }
 
         // -- 認証
         Console.WriteLine("Write your token. It's at Settings > API.");
@@ -43,12 +58,12 @@ class Program
 
         var me = await PostAsync<User>("i", new { i = token });
 
-        Console.WriteLine("Fetched your account:");
-        Console.WriteLine($" {me.Name ?? me.Username} @{me.Name}");
-        Console.WriteLine($" {me.NotesCount} Notes");
+        Console.WriteLine("アカウント情報を取得しました:");
+        Console.WriteLine($" {me.Name ?? me.Username} @{GetAcct(me)}");
+        Console.WriteLine($" {me.NotesCount} ノート");
         Console.WriteLine($" id: {me.Id}");
 
-        Console.WriteLine("Fetching all users you follow...");
+        Console.WriteLine("フォローしているユーザー全員の情報を取得中...");
 
         var kataomoi = (await PostPaginationAsync<Following>("users/following", new { i = token, userId = me.Id }))
             .Select(f => f.Followee)
@@ -57,15 +72,14 @@ class Program
 
         foreach (var u in kataomoi)
         {
-            Console.WriteLine($"{u.Name ?? u.Username} @{u.Username}@{u.Host ?? host}");
+            Console.WriteLine($"{u.Name ?? u.Username} @{GetAcct(u)}");
         }
 
-
-        Console.WriteLine($"These {kataomoiCount} users don't follow you but you follow them.\nDo you want to unfollow them (y/N) ? ");
+        Console.WriteLine($"フォローしているうち {kataomoiCount} 人のユーザーがあなたをフォローしていません。全てフォロー解除しますか？ (y/N) ? ");
 
         if (Console.ReadLine().ToLowerInvariant() == "y")
         {
-            Console.WriteLine("Which mode do you prefer? Please select a number:\n1. Unfollow all\n2. Unfollow one by one");
+            Console.WriteLine("希望するモードを次の数字で選んでください:\n1. 一括で全てフォローを外す\n2. ひとりひとり確認してフォローを外す");
             var isAllMode = Console.ReadLine().Trim() == "1";
             foreach (var u in kataomoi)
             {
@@ -74,7 +88,7 @@ class Program
                     var delete = isAllMode;
                     if (!isAllMode)
                     {
-                        Console.WriteLine($"Do you want to unfollow {u.Name ?? u.Username}? (y/N)");
+                        Console.WriteLine($"@{GetAcct(u)} をフォロー解除しますか？ (y/N)");
                         delete = Console.ReadLine().ToLowerInvariant() == "y";
                     }
 
@@ -82,31 +96,27 @@ class Program
                         await PostAsync("following/delete", new { i = token, userId = u.Id });
 
                     if (isAllMode)
-                        Console.WriteLine($"Unfollowed {u.Name ?? u.Username}");
+                        Console.WriteLine($"{GetAcct(u)} をフォロー解除しました");
                 }
                 catch (ApiErrorException e)
                 {
-                    Console.WriteLine($"Exception thrown: {e.Message}");
-                    Console.WriteLine("Retry after 15 minutes");
-                    await Task.Delay(899000);
+                    await RetryAsync(e);
                 }
                 catch (HttpRequestException e)
                 {
-                    Console.WriteLine($"Exception thrown: {e.Message}");
-                    Console.WriteLine("Retry after 15 minutes");
-                    await Task.Delay(899000);
+                    await RetryAsync(e);
                 }
             }
         }
 
-        Console.WriteLine("Do you want to note that detect one-sided followees (y/N) ? ");
+        Console.WriteLine("片思いフォローの検出をノートしますか？ (y/N) ? ");
 
         if (Console.ReadLine().ToLowerInvariant() == "y")
         {
-            await PostAsync("notes/create", new { i = token, visibility = "home", text = $"I have followed {kataomoi.Count()} users one-sidedly. #FFScopeForMisskey" });
+            await PostAsync("notes/create", new { i = token, visibility = "home", text = $"{kataomoi.Count()}人に片思いされていました。 #FFScopeForMisskey" });
         }
 
-        Console.WriteLine("Press ENTER to exit");
+        Console.WriteLine("ENTER キーを押して終了");
         Console.ReadLine();
     }
 
