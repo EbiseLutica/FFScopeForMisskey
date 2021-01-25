@@ -18,6 +18,12 @@ class Program
             : user.Username;
     }
 
+    static string GetAcctUrl(User user, string host)
+    {
+        var h = user.Host ?? host;
+        return $"https://{h}/@{user.Username}";
+    }
+
     static async Task Main(string[] args)
     {
         string token;
@@ -72,7 +78,7 @@ class Program
 
         foreach (var u in kataomoi)
         {
-            Console.WriteLine($"{u.Name ?? u.Username} @{GetAcct(u)}");
+            Console.WriteLine($"{u.Name ?? u.Username} {GetAcctUrl(u, host)}");
         }
 
         Console.WriteLine($"フォローしているうち {kataomoiCount} 人のユーザーがあなたをフォローしていません。全てフォロー解除しますか？ (y/N) ? ");
@@ -88,7 +94,7 @@ class Program
                     var delete = isAllMode;
                     if (!isAllMode)
                     {
-                        Console.WriteLine($"@{GetAcct(u)} をフォロー解除しますか？ (y/N)");
+                        Console.WriteLine($"@{GetAcctUrl(u, host)} をフォロー解除しますか？ (y/N)");
                         delete = Console.ReadLine().ToLowerInvariant() == "y";
                     }
 
